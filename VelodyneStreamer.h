@@ -1,11 +1,15 @@
-#pragma once
+#ifndef VELODYNESTREAMER_H
+#define VELODYNESTREAMER_H
+
+#include <list>
+#include <vector>
+
+#include <pcl/common/common_headers.h>
 
 #include "VCloud.h"
 #include "PcapReader.h"
 #include "TauronTypes.h"
-#include <pcl\common\common_headers.h>
-#include <list>
-#include <vector>
+
 
 enum SensorType { HDL64, HDL32, VLP16 };
 
@@ -58,3 +62,5 @@ public:
 
 	std::vector<int> HDL_laser_arrangements();
 };
+
+#endif

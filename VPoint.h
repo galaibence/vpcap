@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VPOINT_H
+#define VPOINT_H
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -8,7 +9,7 @@ struct VPoint {
 	float x, y, z; // Point coordinates in metres
 
 	int intensity; // Point intensity [0..255]
-	int azimuth; // Azimuth angle [0..36000] (360° - 0.01° resolution)
+	int azimuth; // Azimuth angle [0..36000] (360ï¿½ - 0.01ï¿½ resolution)
 	int distanceINT; // Measured distance [0..) in milimeters
 	float distance; // Measured distance [0..) in meters
 	float elevation; // Elevation angle
@@ -23,3 +24,5 @@ struct VPoint {
 		z = distance / 1000.0f * sinf(elevation * M_PI / 180.0f);
 	};
 };
+
+#endif

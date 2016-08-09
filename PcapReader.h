@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PCAPREADER_H
+#define PCAPREADER_H
 
 #include <cstdint>
 #include <string>
@@ -30,3 +31,4 @@ public:
 	bool nextPacket(Packet& packet);
 };
 
+#endif

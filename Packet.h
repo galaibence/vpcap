@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PACKET_H
+#define PACKET_H
 
 #include "PacketHeader.h"
 #include "PacketData.h"
@@ -22,3 +23,5 @@ public:
 	void release();
 	int size();
 };
+
+#endif

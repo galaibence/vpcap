@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VCLOUD_H
+#define VCLOUD_H
 
 #include <vector>
 
@@ -30,3 +31,5 @@ public:
 		_points.resize(0);
 	}
 };
+
+#endif

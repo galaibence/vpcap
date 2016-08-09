@@ -1,8 +1,10 @@
-#include <iostream>
-#include <fstream>
-#include <algorithm>
-#include <list>
 #include "VelodyneStreamer.h"
+
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <list>
+
 #include "TauronTypes.h"
 
 #define ROTCORRECTION 0
@@ -458,8 +460,8 @@ bool VelodyneStreamer::nextFrameHDL64(VCloud& cloud) {
 					//	maxIntensity = arr[j][MAXINTENSITY];
 					//	//Get intensity scale
 					//	intensityScale = (maxIntensity - minIntensity);
-					//	// Get firing “i”  intensity
-					//	// Get firing “i” distance, here unit is 2mm
+					//	// Get firing \93i\94  intensity
+					//	// Get firing \93i\94 distance, here unit is 2mm
 					//	distance *= 20000;
 					//	// Calculate offset according calibration
 					//	float focaloffset = 256 * (1 - arr[j][FOCALDISTANCE] / 13100)*(1 - arr[j][FOCALDISTANCE] / 13100);
@@ -955,17 +957,193 @@ bool VelodyneStreamer::nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZRGBNormal>&
 }
 
 bool VelodyneStreamer::nextFrameHDL32(pcl::PointCloud<pcl::PointXYZI>& cloud) {
-	std::cout << "HDL32 packet" << std::endl;
-	return false;
+	cloud.clear();
+
+	Packet packet;
+	pcl::PointXYZI p;
+
+	bool first = true;
+	float previous_azimuth = -1.0f;
+	int packet_number = 0;
+	while (_reader.nextPacket(packet)) {
+		if (packet.header().incl_len < 1248) continue;
+
+		const unsigned char *payload = packet.data().payload();
+
+		int azimuth;
+		int average_azimuth_difference = 0.0f;
+		int distance = 0.0f;
+
+		int r;
+		for (int n = 0; n < 12; n++) {
+			payload = payload + 2; // 0xFFEE
+
+			parseAzimuth(payload, azimuth);
+			if (first) {
+				previous_azimuth = azimuth;
+				first = false;
+			}
+			else {
+				if (azimuth < previous_azimuth) {
+					return true;
+				}
+			}
+			previous_azimuth = azimuth;
+			payload = payload + 2; // AZIMUTH
+
+			for (int i = 0; i < 32; i++) {
+				parseDataBlock(payload, distance, r);
+				payload = payload + 3; // DATABLOCK
+
+				if (distance > 0) {
+					p.intensity = r;
+
+					p.x = distance / 1000.0f * cosf(laser_ids[i] * M_PI / 180.0f) * sinf(azimuth / 100.0f * M_PI / 180.0f);
+					p.y = distance / 1000.0f * cosf(laser_ids[i] * M_PI / 180.0f) * cosf(azimuth / 100.0f * M_PI / 180.0f);
+					p.z = distance / 1000.0f * sinf(laser_ids[i] * M_PI / 180.0f);
+
+					cloud.push_back(p);
+				}
+        else {
+
+        }
+			}
+		}
+	}
+
+	return !first;
 }
+
 bool VelodyneStreamer::nextFrameHDL32(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud) {
-	std::cout << "HDL32 packet" << std::endl;
-	return false;
+	cloud.clear();
+
+	Packet packet;
+	pcl::PointXYZRGBNormal p;
+
+	bool first = true;
+	float previous_azimuth = -1.0f;
+	int packet_number = 0;
+	while (_reader.nextPacket(packet)) {
+		if (packet.header().incl_len < 1248) continue;
+
+		const unsigned char *payload = packet.data().payload();
+
+		int azimuth;
+		int average_azimuth_difference = 0.0f;
+		int distance = 0.0f;
+
+		int r;
+		for (int n = 0; n < 12; n++) {
+			payload = payload + 2; // 0xFFEE
+
+			parseAzimuth(payload, azimuth);
+			if (first) {
+				previous_azimuth = azimuth;
+				first = false;
+			}
+			else {
+				if (azimuth < previous_azimuth) {
+					return true;
+				}
+			}
+			previous_azimuth = azimuth;
+			payload = payload + 2; // AZIMUTH
+
+			for (int i = 0; i < 32; i++) {
+				parseDataBlock(payload, distance, r);
+				payload = payload + 3; // DATABLOCK
+
+				if (distance > 0) {
+					r = r * 2;
+					p.r = r > 255 ? r - 256 : 0;
+					p.g = r > 255 ? 255 - (r - 256) : r;
+					p.b = r > 255 ? 0 : 255 - r;
+
+					p.x = distance / 1000.0f * cosf(laser_ids[i] * M_PI / 180.0f) * sinf(azimuth / 100.0f * M_PI / 180.0f);
+					p.y = distance / 1000.0f * cosf(laser_ids[i] * M_PI / 180.0f) * cosf(azimuth / 100.0f * M_PI / 180.0f);
+					p.z = distance / 1000.0f * sinf(laser_ids[i] * M_PI / 180.0f);
+
+					cloud.push_back(p);
+				}
+        else {
+
+        }
+			}
+		}
+	}
+
+	return !first;
 }
+
+
 bool VelodyneStreamer::nextFrameHDL32(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
-  std::cout << "HDL32 packet" << std::endl;
-  return false;
+	cloud.clear();
+        data.clear();
+
+	Packet packet;
+	pcl::PointXYZRGBNormal p;
+
+	bool first = true;
+	float previous_azimuth = -1.0f;
+	int packet_number = 0;
+	while (_reader.nextPacket(packet)) {
+		if (packet.header().incl_len < 1248) continue;
+
+		const unsigned char *payload = packet.data().payload();
+
+		int azimuth;
+		int average_azimuth_difference = 0.0f;
+		int distance = 0.0f;
+
+		int r;
+		for (int n = 0; n < 12; n++) {
+			payload = payload + 2; // 0xFFEE
+
+			parseAzimuth(payload, azimuth);
+			if (first) {
+				previous_azimuth = azimuth;
+				first = false;
+			}
+			else {
+				if (azimuth < previous_azimuth) {
+					return true;
+				}
+			}
+			previous_azimuth = azimuth;
+			payload = payload + 2; // AZIMUTH
+
+			for (int i = 0; i < 32; i++) {
+				parseDataBlock(payload, distance, r);
+				payload = payload + 3; // DATABLOCK
+
+				if (distance > 0) {
+                                        TData tdata;
+                                        tdata.intensity = r;
+                                        tdata.azimuth = azimuth * 0.01f;
+                                        tdata.distance = distance * 0.01f;
+                                        data.push_back(tdata);
+
+					r = r * 2;
+					p.r = r > 255 ? r - 256 : 0;
+					p.g = r > 255 ? 255 - (r - 256) : r;
+					p.b = r > 255 ? 0 : 255 - r;
+                                        
+					p.x = distance / 1000.0f * cosf(laser_ids[i] * M_PI / 180.0f) * sinf(azimuth / 100.0f * M_PI / 180.0f);
+					p.y = distance / 1000.0f * cosf(laser_ids[i] * M_PI / 180.0f) * cosf(azimuth / 100.0f * M_PI / 180.0f);
+					p.z = distance / 1000.0f * sinf(laser_ids[i] * M_PI / 180.0f);
+
+					cloud.push_back(p);
+				}
+        else {
+
+        }
+			}
+		}
+	}
+
+	return !first;
 }
+
 
 bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZI>& cloud) {
 	cloud.clear();
@@ -1036,8 +1214,8 @@ bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZI>& cloud) {
 						maxIntensity = arr[i + !upper * 32][MAXINTENSITY];
 						//Get intensity scale
 						intensityScale = (maxIntensity - minIntensity);
-						// Get firing “i”  intensity
-						// Get firing “i” distance, here unit is 2mm
+						// Get firing \93i\94  intensity
+						// Get firing \93i\94 distance, here unit is 2mm
 						distance *= 20000;
 						// Calculate offset according calibration
 						float focaloffset = 256 * (1 - arr[i + !upper * 32][FOCALDISTANCE] / 13100)*(1 - arr[i + !upper * 32][FOCALDISTANCE] / 13100);

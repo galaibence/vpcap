@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PACKETDATA_H
+#define PACKETDATA_H
 
 class PacketData {
 private:
@@ -16,3 +17,5 @@ public:
 	const unsigned char* header();
 	const unsigned char* payload();
 };
+
+#endif

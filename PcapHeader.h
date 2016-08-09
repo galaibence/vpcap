@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PCAPHEADER_H
+#define PCAPHEADER_H
 
 #include <cstdint>
 
@@ -12,3 +13,5 @@ public:
 	uint32_t snaplen;
 	uint32_t network;
 };
+
+#endif

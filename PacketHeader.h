@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PACKETHEADER_H
+#define PACKETHEADER_H
 
 #include <cstdint>
 
@@ -11,3 +12,5 @@ public:
 
 	void parseHeaderData(const unsigned char * data);
 };
+
+#endif

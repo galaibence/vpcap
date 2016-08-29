@@ -22,6 +22,7 @@
 *.la
 *.a
 *.lib
+*.o
 
 # Executables
 *.exe
@@ -29,3 +30,5 @@
 *.app
 
 .vscode
+.build
+.lib

@@ -101,7 +101,6 @@ void PcapReader::skip(std::string file_name) {
 	if (file.is_open()) {
 		file.seekg(0, file.end);
 		long long size = file.tellg();
-		float size_per_count = size / 1.0f;
 		file.seekg(0);
 
 		ofs.open(file_name + "_skip.pcap", std::ifstream::out | std::ifstream::binary);

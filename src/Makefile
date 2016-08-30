@@ -12,3 +12,4 @@ all: $(OBJECTS)
 
 clean:
 	rm ../build/*.o
+	rm ../lib/*.a

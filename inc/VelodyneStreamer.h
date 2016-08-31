@@ -6,13 +6,14 @@
 
 #include <pcl/common/common_headers.h>
 
-#include "VCloud.h"
+#include "GPSInfo.h"
 #include "Packet.h"
 #include "PcapReader.h"
 #include "TauronTypes.h"
+#include "VCloud.h"
 
 
-enum SensorType { HDL64, HDL32, VLP16 };
+enum struct SensorType { HDL64, HDL32, VLP16 };
 
 class VelodyneStreamer {
 private:
@@ -21,13 +22,8 @@ private:
 	void parseTimeStamp(const unsigned char* data, unsigned int& timestamp);
 	
 	bool parseNMEASentance(
-		const unsigned char* data, 
-		int& timestamp, 
-		float& latitude, int& north_south, 
-		float& longitude, int& east_west, 
-		float& speed_knots, 
-		float& true_course,
-		float& variation, int& east_west_variation);
+		const char* data, 
+		GPSInfo& gps_info);
 
 	int interpolate_azimuth(int previous_azimuth, int next_azimuth);
 

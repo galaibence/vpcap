@@ -5,8 +5,12 @@
 #include <iostream>
 #include <list>
 
+#include "GPSInfo.h"
 #include "Packet.h"
+#include "PcapReader.h"
 #include "TauronTypes.h"
+#include "VCloud.h"
+#include "VPoint.h"
 
 #define ROTCORRECTION 0
 #define VERTCORRECTION 1
@@ -102,136 +106,112 @@ double arr[64][11] = {
 
 
 VelodyneStreamer::VelodyneStreamer(std::string pcap) {
-    _reader.open(pcap);
+  _reader.open(pcap);
 
-    Packet packet;
-    while (_reader.nextPacket(packet)) {
-        if (packet.size() >= 1248) {
-            if ((int)packet.data().payload()[1247 - 42] == 0x22) {
-                sensor = SensorType::VLP16;
-                dual_distance_return = (int)packet.data().payload()[1246 - 42] == 0x39;
-            }
-            else if ((int)packet.data().payload()[1247 - 42] == 0x21) {
-                sensor = SensorType::HDL32;
-            }
-            else {
-                sensor = SensorType::HDL64;
-            }
-            break;
-        }
+  Packet packet;
+  while (_reader.nextPacket(packet)) {
+    if (packet.size() >= 1248) {
+      if ((int)packet.data().payload()[1247 - 42] == 0x22) {
+        sensor = SensorType::VLP16;
+        dual_distance_return = (int)packet.data().payload()[1246 - 42] == 0x39;
+      }
+      else if ((int)packet.data().payload()[1247 - 42] == 0x21) {
+        sensor = SensorType::HDL32;
+      }
+      else {
+        sensor = SensorType::HDL64;
+      }
+      break;
     }
+  }
 
-    _reader.reset();
+  _reader.reset();
 
 }
 
 VelodyneStreamer::~VelodyneStreamer() {
-    _reader.release();
+  _reader.release();
 }
 
 void VelodyneStreamer::parseAzimuth(const unsigned char* data, int& azimuth) {
-    azimuth = ((int)(data[1] << 8) + (int)data[0]);
+  azimuth = ((int)(data[1] << 8) + (int)data[0]);
 }
 
 void VelodyneStreamer::parseDataBlock(const unsigned char* data, int& distance, int& intensity) {
-    intensity = (int)data[2];
-    distance = ((int)(data[1] << 8) + (int)data[0]) * 2;
+  intensity = (int)data[2];
+  distance = ((int)(data[1] << 8) + (int)data[0]) * 2;
 }
 
 void VelodyneStreamer::parseTimeStamp(const unsigned char* data, unsigned int& timestamp) {
-    timestamp = (unsigned int)(data[3] << 24) + (unsigned int)(data[2] << 16) + (unsigned int)(data[1] << 8) + (unsigned int)data[0];
+  timestamp = (unsigned int)(data[3] << 24) + (unsigned int)(data[2] << 16) + (unsigned int)(data[1] << 8) + (unsigned int)data[0];
 }
 
-bool VelodyneStreamer::parseNMEASentance(
-        const unsigned char* data, 
-        int& timestamp, 
-        float& latitude, int& north_south, 
-        float& longitude, int& east_west, 
-        float& speed_knots, 
-        float& true_course,
-        float& variation, int& east_west_variation) {
-    
-    return false;
+bool VelodyneStreamer::parseNMEASentance(const char* data, GPSInfo& gps_info) {
+  
+  std::string s{ data };
+  std::string delimiter = ",";
+
+  size_t pos = 0;
+  std::string token;
+  while ((pos = s.find(delimiter)) != std::string::npos) {
+      token = s.substr(0, pos);
+      s.erase(0, pos + delimiter.length());
+  }
+
+  return false;
 }
 
 int VelodyneStreamer::interpolate_azimuth(int previous_azimuth, int next_azimuth) {
-    if (next_azimuth < previous_azimuth)
-        next_azimuth = next_azimuth + 36000;
+  if (next_azimuth < previous_azimuth)
+    next_azimuth = next_azimuth + 36000;
 
-    float azimuth = previous_azimuth + ((next_azimuth - previous_azimuth) / 2);
+  float azimuth = previous_azimuth + ((next_azimuth - previous_azimuth) / 2);
 
-    if (azimuth >= 36000) azimuth = azimuth - 36000;
-    return azimuth;
+  if (azimuth >= 36000) azimuth = azimuth - 36000;
+  return azimuth;
 }
 
-char* prev_timestamp = nullptr;
-char* coord = nullptr;
-char* coord1 = nullptr;
+
 void VelodyneStreamer::GPSPacket(Packet& packet) {
-    const unsigned char *payload = packet.data().payload();
+  const unsigned char *payload = packet.data().payload();
 
-    if (coord == nullptr) {
-        coord = new char[8];
-        coord1 = new char[2];
-    }
+  payload += 198; // Unused 198 bytes
+  unsigned int timestamp;
+  parseTimeStamp(payload, timestamp);
+  payload += 4; // Timestamp 4 bytes;
+  payload += 4; // Unused 4 bytes;
 
-    payload += 198; // Unused 198 bytes
-    
-    unsigned int timestamp;
-    parseTimeStamp(payload, timestamp);
-    payload += 4; // Timestamp 4 bytes;
+  char *data = new char[72];
+  memcpy(data, payload, 72);
+  if (strncmp(data, "$GPRMC", 6) == 0) {
+    GPSInfo gps_info;
+    parseNMEASentance(data, gps_info);
+  }
 
-    payload += 4; // Unused 4 bytes;
-
-    char *data = new char[72];
-    memcpy(data, payload, 72);
-    if (strncmp(data, "$GPRMC", 6) == 0) {
-        if (prev_timestamp == nullptr) {
-            prev_timestamp = new char[6];
-        }
-        if (strncmp(data + 7, prev_timestamp, 6) == 0) {}
-        else {
-            memcpy(prev_timestamp, data + 7, 6);
-            // std::cout << atoi(&data[19]) * 10 + atoi(&data[20]) << "°";
-            // for (auto i = 0; i < 8; i++) std::cout << data[21 + i];
-            // std::cout << "' N ";
-            // std::cout << atoi(&data[33]) * 10 + atoi(&data[34]) << "°";
-            // for (auto i = 0; i < 8; i++) std::cout << data[35 + i];
-            // std::cout << "' E";
-            // std::cout << std::endl;
-
-            memcpy(coord1, &data[33], 2);
-            memcpy(coord, &data[35], 8);
-            memcpy(coord1, &data[19], 2);
-            memcpy(coord, &data[21], 8);
-        }
-    }
-    else {	}
-    payload += 72; // NMEA $GPRMC sentence 72 bytes
-
-    payload += 234; // Unused 234 bytes
+  payload += 72; // NMEA $GPRMC sentence 72 bytes
+  payload += 234; // Unused 234 bytes
 }
 
 bool VelodyneStreamer::nextFrame(VCloud& cloud) {
-    switch (sensor) {
-    case SensorType::VLP16: { 
-        if (dual_distance_return) return nextFrameVLP16DD(cloud);
-        else return nextFrameVLP16(cloud); 
-        break; 
-    }
-    case SensorType::HDL32: { 
-        return nextFrameHDL32(cloud); 
-        break; 
-    }
-    case SensorType::HDL64: { 
-        return nextFrameHDL64(cloud); 
-        break; 
-    }
-    default: 
-        throw "Not a valid sensor type!";
-    }
+  switch (sensor) {
+  case SensorType::VLP16: { 
+    if (dual_distance_return) return nextFrameVLP16DD(cloud);
+    else return nextFrameVLP16(cloud); 
+    break; 
+  }
+  case SensorType::HDL32: { 
+    return nextFrameHDL32(cloud); 
+    break; 
+  }
+  case SensorType::HDL64: { 
+    return nextFrameHDL64(cloud); 
+    break; 
+  }
+  default: 
+    throw "Not a valid sensor type!";
+  }
 
-    return false;
+  return false;
 }
 
 bool VelodyneStreamer::nextFrameVLP16(VCloud& cloud) {

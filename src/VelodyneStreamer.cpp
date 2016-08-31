@@ -146,22 +146,54 @@ void VelodyneStreamer::parseTimeStamp(const unsigned char* data, unsigned int& t
   timestamp = (unsigned int)(data[3] << 24) + (unsigned int)(data[2] << 16) + (unsigned int)(data[1] << 8) + (unsigned int)data[0];
 }
 
-bool VelodyneStreamer::parseNMEASentance(const char* data, GPSInfo& gps_info) {
+bool VelodyneStreamer::parseNMEASentence(const char* data, GPSInfo& gps_info) {
   
-  std::string s{ data };
+  bool validity = false;
+  std::string sentence{ data };
   std::string delimiter = ",";
 
   size_t pos = 0;
-  std::string token;
-  while ((pos = s.find(delimiter)) != std::string::npos) {
-      token = s.substr(0, pos);
-      s.erase(0, pos + delimiter.length());
+  std::string word;
+  int index = 0;
+  while ((pos = sentence.find(delimiter)) != std::string::npos) {
+    word = sentence.substr(0, pos);
+    sentence.erase(0, pos + delimiter.length());
+    switch(index) {
+      case 1: gps_info.timestamp = atoi(word.c_str()); break;
+      case 2: validity = (word[0] == 'A');        
+      case 3: {
+        char* degree = new char[2];
+        char* seconds = new char[8];
+        memcpy(degree, word.c_str(), 2);
+        memcpy(seconds, word.c_str() + 2, 8);
+        gps_info.latitude = atof(degree) + atof(seconds) / 60.0f;
+        delete[] degree;
+        delete[] seconds;
+      }; break;
+      case 4: gps_info.north_south = word[0];break;
+      case 5: {
+        char* degree = new char[3];
+        char* seconds = new char[8];
+        memcpy(degree, word.c_str(), 3);
+        memcpy(seconds, word.c_str() + 3, 8);
+        gps_info.longitude = atof(degree) + atof(seconds) / 60.0f;
+        delete[] degree;
+        delete[] seconds;
+      }; break; 
+      case 6: gps_info.east_west = word[0]; break;
+      case 7: gps_info.speed = atof(word.c_str()) * 1.852f / 3.6f; break;
+      case 8: gps_info.true_course = atof(word.c_str()); break;
+      case 10: gps_info.variation = atof(word.c_str()); break;
+      default: break;
+    }
+    index++;
   }
+  gps_info.east_west_variation = sentence[0];
 
-  return false;
+  return validity;
 }
 
-int VelodyneStreamer::interpolate_azimuth(int previous_azimuth, int next_azimuth) {
+int VelodyneStreamer::interpolateAzimuth(int previous_azimuth, int next_azimuth) {
   if (next_azimuth < previous_azimuth)
     next_azimuth = next_azimuth + 36000;
 
@@ -172,7 +204,7 @@ int VelodyneStreamer::interpolate_azimuth(int previous_azimuth, int next_azimuth
 }
 
 
-void VelodyneStreamer::GPSPacket(Packet& packet) {
+void VelodyneStreamer::handleGPSPacket(Packet& packet) {
   const unsigned char *payload = packet.data().payload();
 
   payload += 198; // Unused 198 bytes
@@ -184,8 +216,7 @@ void VelodyneStreamer::GPSPacket(Packet& packet) {
   char *data = new char[72];
   memcpy(data, payload, 72);
   if (strncmp(data, "$GPRMC", 6) == 0) {
-    GPSInfo gps_info;
-    parseNMEASentance(data, gps_info);
+    parseNMEASentence(data, gps_info);
   }
 
   payload += 72; // NMEA $GPRMC sentence 72 bytes
@@ -226,7 +257,7 @@ bool VelodyneStreamer::nextFrameVLP16(VCloud& cloud) {
     while (_reader.nextPacket(packet)) {
         if (packet.header().incl_len < 1248) {
             if (packet.header().incl_len == 554) {
-                GPSPacket(packet);
+                handleGPSPacket(packet);
                 continue;
             }
             else continue;
@@ -258,7 +289,7 @@ bool VelodyneStreamer::nextFrameVLP16(VCloud& cloud) {
             previous_azimuth = azimuth[0];
             if (n < 11) {
                 parseAzimuth(payload + 100, azimuth[2]);
-                azimuth[1] = interpolate_azimuth(azimuth[0], azimuth[2]);
+                azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
                 average_azimuth_difference += azimuth[1] - azimuth[0];
             }
             else {
@@ -329,7 +360,7 @@ bool VelodyneStreamer::nextFrameVLP16DD(VCloud& cloud) {
             previous_azimuth = azimuth[0];
             if (n < 11) {
                 parseAzimuth(payload + 100, azimuth[2]);
-                azimuth[1] = interpolate_azimuth(azimuth[0], azimuth[2]);
+                azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
                 average_azimuth_difference += azimuth[1] - azimuth[0];
             }
             else {
@@ -510,24 +541,24 @@ bool VelodyneStreamer::nextFrameHDL64(VCloud& cloud) {
                     p.intensity = r;
 
                     if (r != 0) {
-                    	minIntensity = arr[i + !upper * 32][MININTENSITY];
-                    	maxIntensity = arr[i + !upper * 32][MAXINTENSITY];
+                        minIntensity = arr[i + !upper * 32][MININTENSITY];
+                        maxIntensity = arr[i + !upper * 32][MAXINTENSITY];
 
-                    	intensityScale = (maxIntensity - minIntensity);
+                        intensityScale = (maxIntensity - minIntensity);
 
-                    	distance *= 20000;
+                        distance *= 20000;
 
-                    	focaloffset = 256 * (1 - arr[i + !upper * 32][FOCALDISTANCE] / 13100)*(1 - arr[i + !upper * 32][FOCALDISTANCE] / 13100);
+                        focaloffset = 256 * (1 - arr[i + !upper * 32][FOCALDISTANCE] / 13100)*(1 - arr[i + !upper * 32][FOCALDISTANCE] / 13100);
 
-                    	focalslope = arr[i + !upper * 32][FOCALSLOPE];
+                        focalslope = arr[i + !upper * 32][FOCALSLOPE];
 
-                    	intensityVal1 = r + focalslope*(abs(focaloffset - 256 * (1 - distance / 65535)*(1 - distance / 65535)));
-                    	if (intensityVal1 < minIntensity) intensityVal1 = minIntensity;
-                    	if (intensityVal1 > maxIntensity) intensityVal1 = maxIntensity;
+                        intensityVal1 = r + focalslope*(abs(focaloffset - 256 * (1 - distance / 65535)*(1 - distance / 65535)));
+                        if (intensityVal1 < minIntensity) intensityVal1 = minIntensity;
+                        if (intensityVal1 > maxIntensity) intensityVal1 = maxIntensity;
 
-                    	intensityColor = (intensityVal1 - minIntensity) / intensityScale;
+                        intensityColor = (intensityVal1 - minIntensity) / intensityScale;
 
-                    	p.intensity = intensityColor;
+                        p.intensity = intensityColor;
                     }
 
                     cloud.push_back(p);
@@ -637,7 +668,7 @@ bool VelodyneStreamer::nextFrameVLP16(pcl::PointCloud<pcl::PointXYZI>& cloud) {
             previous_azimuth = azimuth[0];
             if (n < 11) {
                 parseAzimuth(payload + 100, azimuth[2]);
-                azimuth[1] = interpolate_azimuth(azimuth[0], azimuth[2]);
+                azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
                 average_azimuth_difference += azimuth[1] - azimuth[0];
             }
             else {
@@ -700,7 +731,7 @@ bool VelodyneStreamer::nextFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
             previous_azimuth = azimuth[0];
             if (n < 11) {
                 parseAzimuth(payload + 100, azimuth[2]);
-                azimuth[1] = interpolate_azimuth(azimuth[0], azimuth[2]);
+                azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
                 average_azimuth_difference += azimuth[1] - azimuth[0];
             }
             else {
@@ -767,7 +798,7 @@ bool VelodyneStreamer::nextFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
       previous_azimuth = azimuth[0];
       if (n < 11) {
         parseAzimuth(payload + 100, azimuth[2]);
-        azimuth[1] = interpolate_azimuth(azimuth[0], azimuth[2]);
+        azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
         average_azimuth_difference += azimuth[1] - azimuth[0];
       }
       else {
@@ -841,7 +872,7 @@ bool VelodyneStreamer::nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZI>& cloud) 
             previous_azimuth = azimuth[0];
             if (n < 11) {
                 parseAzimuth(payload + 100, azimuth[2]);
-                azimuth[1] = interpolate_azimuth(azimuth[0], azimuth[2]);
+                azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
                 average_azimuth_difference += azimuth[1] - azimuth[0];
             }
             else {
@@ -904,7 +935,7 @@ bool VelodyneStreamer::nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZRGBNormal>&
             previous_azimuth = azimuth[0];
             if (n < 11) {
                 parseAzimuth(payload + 100, azimuth[2]);
-                azimuth[1] = interpolate_azimuth(azimuth[0], azimuth[2]);
+                azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
                 average_azimuth_difference += azimuth[1] - azimuth[0];
             }
             else {
@@ -970,7 +1001,7 @@ bool VelodyneStreamer::nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZRGBNormal>&
       previous_azimuth = azimuth[0];
       if (n < 11) {
         parseAzimuth(payload + 100, azimuth[2]);
-        azimuth[1] = interpolate_azimuth(azimuth[0], azimuth[2]);
+        azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
         average_azimuth_difference += azimuth[1] - azimuth[0];
       }
       else {

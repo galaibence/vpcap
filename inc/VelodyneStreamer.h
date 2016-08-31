@@ -20,14 +20,10 @@ private:
 	void parseAzimuth(const unsigned char* data, int& azimuth);
 	void parseDataBlock(const unsigned char* data, int& distance, int& intensity);
 	void parseTimeStamp(const unsigned char* data, unsigned int& timestamp);
+	bool parseNMEASentence(const char* data,GPSInfo& gps_info);
+	void handleGPSPacket(Packet& packet);
+	int interpolateAzimuth(int previous_azimuth, int next_azimuth);
 	
-	bool parseNMEASentance(
-		const char* data, 
-		GPSInfo& gps_info);
-
-	int interpolate_azimuth(int previous_azimuth, int next_azimuth);
-
-	void GPSPacket(Packet& packet);
 
 	bool nextFrameVLP16(VCloud& cloud);
 	bool nextFrameVLP16DD(VCloud& cloud);
@@ -58,9 +54,6 @@ public:
 	VelodyneStreamer(std::string pcap);
 	~VelodyneStreamer();
 
-	SensorType sensor;
-	bool dual_distance_return;
-
 	bool open(std::string pcap);
 
 	bool nextFrame(VCloud& cloud);
@@ -71,6 +64,11 @@ public:
 
   bool nextFrameInOrder(std::vector<std::vector<VPoint>>& pointlist);
   bool nextFrameInOrder64(std::vector<std::vector<VPoint>>& pointlist);
+
+	SensorType sensor;
+	GPSInfo gps_info;
+	bool dual_distance_return;
+
 };
 
 #endif

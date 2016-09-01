@@ -29,6 +29,8 @@ public:
 
 	PcapHeader header();
 	bool nextPacket(Packet& packet);
+	bool previousPacket(Packet& packet);
+
 };
 
 #endif

@@ -9,7 +9,6 @@ PcapReader::PcapReader() :_index{ 24 }, _pcap{ nullptr }, _header{ nullptr } {}
 
 PcapReader::PcapReader(std::string file_name) : _index{ 24 }, _pcap{ nullptr }, _header{ nullptr } {
 	if (!open(file_name)) {
-		_index = 24;
 		if (_pcap != nullptr) {
 			delete[] _pcap;
 			_pcap = nullptr;
@@ -199,5 +198,27 @@ bool PcapReader::nextPacket(Packet& packet) {
 
 	packet.release();
 	packet = Packet(packet_h, packet_data);
+	return true;
+}
+
+bool PcapReader::previousPacket(Packet& packet) {
+	if (_index < 24 + 16 + 1248) return false;
+
+	PacketHeader* packet_h = new PacketHeader();
+	packet_h->parseHeaderData(_pcap + _index - 16 - 1248);
+	
+	int number_of_gps_packets = 1;
+	while(packet_h->incl_len != 1248) {
+		packet_h->parseHeaderData(_pcap + _index - ((16 + 554) * number_of_gps_packets++) - 16 - 1248);
+	}
+	_index = _index - ((16 + 554) * number_of_gps_packets - 1) - 16 - 1248 + 16;
+
+	PacketData* packet_data = new PacketData(_pcap + _index);
+	packet_data->size(packet_h->incl_len);
+	_index += packet_data->size();	
+
+	packet.release();
+	packet = Packet(packet_h, packet_data);
+
 	return true;
 }

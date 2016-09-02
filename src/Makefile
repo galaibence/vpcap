@@ -1,6 +1,6 @@
 CXX=g++
 CXXFLAGS=-c -Wall -pedantic -std=c++14
-INCFLAGS=-I/home/bence/Documents/Workspace/TauronExample -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I../inc
+INCFLAGS=-I/home/bence/Documents/Workspace/PointCloudFramework/inc -I/usr/include/pcl-1.7 -I/usr/include/eigen3 -I../inc
 SOURCES=Packet.cpp PacketData.cpp PacketHeader.cpp PcapReader.cpp VelodyneStreamer.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
 

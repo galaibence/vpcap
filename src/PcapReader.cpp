@@ -188,13 +188,19 @@ void PcapReader::reset() {
 bool PcapReader::nextPacket(Packet& packet) {
 	if (_index >= _pcap_size) return false;
 
+	// std::cout << "load index in: " << _index << std::endl;
+
 	PacketHeader* packet_h = new PacketHeader();
 	packet_h->parseHeaderData(_pcap + _index);
 	_index += 16;
 
+	// std::cout << "load incl_len: " << packet_h->incl_len << std::endl;
+
 	PacketData* packet_data = new PacketData(_pcap + _index);
 	packet_data->size(packet_h->incl_len);
 	_index += packet_data->size();	
+
+	// std::cout << "load index out: " << _index << std::endl;
 
 	packet.release();
 	packet = Packet(packet_h, packet_data);
@@ -202,16 +208,40 @@ bool PcapReader::nextPacket(Packet& packet) {
 }
 
 bool PcapReader::previousPacket(Packet& packet) {
-	if (_index < 24 + 16 + 1248) return false;
+	// std::cout << "Entering previousPacket(Packet& packet)" << std::endl;
+	// std::cout << "  " << _index << " < 16 + 1248 == " << (_index < 16 + 1248) << std::endl;
+	if (_index < 16 + 1248) return false;
 
 	PacketHeader* packet_h = new PacketHeader();
 	packet_h->parseHeaderData(_pcap + _index - 16 - 1248);
 	
+	// std::cout << "  load index: " << _index - 16 - 1248 << std::endl;
+	// std::cout << "  load incl_len:" << packet_h->incl_len << std::endl;
+
 	int number_of_gps_packets = 1;
 	while(packet_h->incl_len != 1248) {
-		packet_h->parseHeaderData(_pcap + _index - ((16 + 554) * number_of_gps_packets++) - 16 - 1248);
+		packet_h->parseHeaderData(_pcap + _index - ((16 + 554) * number_of_gps_packets) - 16 - 1248);
+		// std::cout << "  1st while index: " << _index - ((16 + 554) * number_of_gps_packets) - 16 - 1248 << std::endl;
+		// std::cout << "  1st while incl_len: " << packet_h->incl_len << std::endl;
+		number_of_gps_packets++;
 	}
-	_index = _index - ((16 + 554) * number_of_gps_packets - 1) - 16 - 1248 + 16;
+	_index = _index - ((16 + 554) * (number_of_gps_packets - 1)) - 16 - 1248;
+	// std::cout << "  1st new index: " << _index << std::endl;
+
+	packet_h->parseHeaderData(_pcap + _index);
+	// std::cout << "  1st incl_len: " << packet_h->incl_len << std::endl;
+
+	number_of_gps_packets = 1;
+	while(packet_h->incl_len != 1248) {
+		packet_h->parseHeaderData(_pcap + _index - ((16 + 554) * number_of_gps_packets) - 16 - 1248);
+		// std::cout << "  2nd while index: " << _index - ((16 + 554) * number_of_gps_packets) - 16 - 1248 << std::endl;
+		// std::cout << "  2nd while incl_len: " << packet_h->incl_len << std::endl;
+		number_of_gps_packets++;
+	}
+	_index = _index - ((16 + 554) * (number_of_gps_packets - 1)) - 16 - 1248;
+	// std::cout << "  2nd new index: " << _index << std::endl;
+	// std::cout << "  2nd incl_len: " << packet_h->incl_len << std::endl;
+	_index += 16;
 
 	PacketData* packet_data = new PacketData(_pcap + _index);
 	packet_data->size(packet_h->incl_len);

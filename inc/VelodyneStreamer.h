@@ -26,6 +26,7 @@ private:
 	
 
 	bool nextFrameVLP16(VCloud& cloud);
+	bool previousFrameVLP16(VCloud& cloud);
 	bool nextFrameVLP16DD(VCloud& cloud);
 	bool nextFrameHDL32(VCloud& cloud);
 	bool nextFrameHDL64(VCloud& cloud);
@@ -46,6 +47,9 @@ private:
 	bool nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud);
   bool nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data);
 
+	std::vector<int> _frame_pointers;
+	int _current_frame_idx;
+
 protected:
 	PcapReader _reader;
 
@@ -57,6 +61,7 @@ public:
 	bool open(std::string pcap);
 
 	bool nextFrame(VCloud& cloud);
+	bool previousFrame(VCloud& cloud);
 	bool nextFrame(pcl::PointCloud<pcl::PointXYZI>& cloud);
 	bool nextFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud);
   bool nextFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data);

@@ -108,6 +108,8 @@ double arr[64][11] = {
 VelodyneStreamer::VelodyneStreamer(std::string pcap) {
   _reader.open(pcap);
 
+  _current_frame_idx = 0;
+
   Packet packet;
   while (_reader.nextPacket(packet)) {
     if (packet.size() >= 1248) {
@@ -245,11 +247,120 @@ bool VelodyneStreamer::nextFrame(VCloud& cloud) {
   return false;
 }
 
+bool VelodyneStreamer::previousFrame(VCloud& cloud) {
+  switch (sensor) {
+  case SensorType::VLP16: { 
+    if (dual_distance_return) return nextFrameVLP16DD(cloud);
+    else return previousFrameVLP16(cloud); 
+    break; 
+  }
+  case SensorType::HDL32: { 
+    return nextFrameHDL32(cloud); 
+    break; 
+  }
+  case SensorType::HDL64: { 
+    return nextFrameHDL64(cloud); 
+    break; 
+  }
+  default: 
+    throw "Not a valid sensor type!";
+  }
+
+  return false;
+}
+
 bool VelodyneStreamer::nextFrameVLP16(VCloud& cloud) {
     cloud.clear();
 
     Packet packet;
     VPoint p;
+
+    bool first = true;
+    float previous_azimuth = -1.0f;
+    float PIper180 = M_PI / 180.0f;
+
+    _frame_pointers.push_back(_reader.currentIndex());
+    _current_frame_idx++;
+
+    while (_reader.nextPacket(packet)) {
+
+        if (packet.header().incl_len < 1248) {
+            if (packet.header().incl_len == 554) {
+                handleGPSPacket(packet);
+                continue;
+            }
+            else continue;
+        }
+
+        const unsigned char *payload = packet.data().payload();
+
+        int azimuth[3];
+        int average_azimuth_difference = 0.0f;
+        int distance = 0.0f;
+
+        unsigned int timestamp;
+        parseTimeStamp(payload + 1200, timestamp);
+
+        int r;
+        for (int n = 0; n < 12; n++) {
+            payload = payload + 2; // 0xFFEE
+
+            parseAzimuth(payload, azimuth[0]);
+            if (first) {
+                previous_azimuth = azimuth[0];
+                first = false;
+            }
+            else {
+                if (azimuth[0] < previous_azimuth) {
+                    return true;
+                }
+            }
+            previous_azimuth = azimuth[0];
+            if (n < 11) {
+                parseAzimuth(payload + 100, azimuth[2]);
+                azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
+                average_azimuth_difference += azimuth[1] - azimuth[0];
+            }
+            else {
+                azimuth[1] = azimuth[0] + average_azimuth_difference / 11;
+            }
+            payload = payload + 2; // AZIMUTH
+
+            for (int k = 0; k < 2; k++) {
+                for (int i = 0; i < 16; i++) {
+                    parseDataBlock(payload, distance, r);
+                    payload = payload + 3; // DATABLOCK
+
+                    if (distance > 0) {
+                        p.intensity = r;
+                        p.elevation = laser_ids[i];
+                        p.laser_id = (int)(laser_ids[i] + 15) / 2;
+                        p.azimuth = azimuth[k] >= 36000 ? 0 : azimuth[k];
+                        p.distance = distance * 0.001f;
+                        p.distanceINT = distance;
+                        p.timestamp = timestamp;
+
+                        p.x = distance * 0.001f * cosf(laser_ids[i] * PIper180) * sinf(azimuth[k] * 0.01f * PIper180);
+                        p.y = distance * 0.001f * cosf(laser_ids[i] * PIper180) * cosf(azimuth[k] * 0.01f * PIper180);
+                        p.z = distance * 0.001f * sinf(laser_ids[i] * PIper180);
+
+                        cloud.push_back(p);
+                    }
+                }
+            }
+        }
+    }
+
+    return !first;
+}
+
+bool VelodyneStreamer::previousFrameVLP16(VCloud& cloud) {
+    cloud.clear();
+
+    Packet packet;
+    VPoint p;
+
+    _reader.setCurrentIndex(_frame_pointers[--_current_frame_idx]);
 
     bool first = true;
     float previous_azimuth = -1.0f;
@@ -1516,6 +1627,8 @@ bool VelodyneStreamer::open(std::string pcap) {
     _reader.release();
     if (!_reader.open(pcap)) return false;
     
+    _current_frame_idx = 0;
+
     Packet packet;
     while (_reader.nextPacket(packet)) {
         if (packet.size() >= 1248) {

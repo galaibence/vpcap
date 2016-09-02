@@ -30,7 +30,9 @@ public:
 	PcapHeader header();
 	bool nextPacket(Packet& packet);
 	bool previousPacket(Packet& packet);
-
+	
+	int currentIndex() { return _index; };
+	void setCurrentIndex(int index) { _index = index; };
 };
 
 #endif

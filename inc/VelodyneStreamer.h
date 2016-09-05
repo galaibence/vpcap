@@ -58,6 +58,7 @@ public:
 	VelodyneStreamer(std::string pcap);
 	~VelodyneStreamer();
 
+	void close();
 	bool open(std::string pcap);
 
 	bool nextFrame(VCloud& cloud);

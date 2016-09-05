@@ -1623,6 +1623,10 @@ bool VelodyneStreamer::nextFrameParallel(VCloud& cloud) {
   return true;
 }
 
+void VelodyneStreamer::close() {
+    _reader.release();
+}
+
 bool VelodyneStreamer::open(std::string pcap) {
     _reader.release();
     if (!_reader.open(pcap)) return false;

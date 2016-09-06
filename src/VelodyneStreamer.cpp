@@ -702,6 +702,7 @@ bool VelodyneStreamer::nextFrame(pcl::PointCloud<pcl::PointXYZI>& cloud) {
 
     return false;
 }
+
 bool VelodyneStreamer::nextFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud) {
     switch (sensor) {
     case SensorType::VLP16: {
@@ -723,6 +724,7 @@ bool VelodyneStreamer::nextFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud)
 
     return false;
 }
+
 bool VelodyneStreamer::nextFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
   switch (sensor) {
   case SensorType::VLP16: {
@@ -736,6 +738,28 @@ bool VelodyneStreamer::nextFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud,
   }
   case SensorType::HDL64: {
     return nextFrameHDL64(cloud, data);
+    break;
+  }
+  default:
+    throw "Not a valid sensor type!";
+  }
+
+  return false;
+}
+
+bool VelodyneStreamer::previousFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
+  switch (sensor) {
+  case SensorType::VLP16: {
+    if (dual_distance_return) return nextFrameVLP16DD(cloud, data);
+    else return previousFrameVLP16(cloud, data);
+    break;
+  }
+  case SensorType::HDL32: {
+    return nextFrameHDL32(cloud, data);
+    break;
+  }
+  case SensorType::HDL64: {
+    return previousFrameHDL64(cloud, data);
     break;
   }
   default:
@@ -808,6 +832,7 @@ bool VelodyneStreamer::nextFrameVLP16(pcl::PointCloud<pcl::PointXYZI>& cloud) {
 
     return !first;
 }
+
 bool VelodyneStreamer::nextFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud) {
     cloud.clear();
 
@@ -874,6 +899,7 @@ bool VelodyneStreamer::nextFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
 
     return !first;
 }
+
 bool VelodyneStreamer::nextFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
   cloud.clear();
   data.clear();
@@ -883,6 +909,87 @@ bool VelodyneStreamer::nextFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
 
   bool first = true;
   float previous_azimuth = -1.0f;
+
+  _frame_pointers.push_back(_reader.currentIndex());
+  _current_frame_idx++;
+
+  while (_reader.nextPacket(packet)) {
+    if (packet.header().incl_len < 1248) continue;
+
+    const unsigned char *payload = packet.data().payload();
+
+    int azimuth[3];
+    int average_azimuth_difference = 0.0f;
+    int distance = 0.0f;
+
+    int r;
+    for (int n = 0; n < 12; n++) {
+      payload = payload + 2; // 0xFFEE
+
+      parseAzimuth(payload, azimuth[0]);
+      if (first) {
+        previous_azimuth = azimuth[0];
+        first = false;
+      }
+      else {
+        if (azimuth[0] < previous_azimuth) {
+          return true;
+        }
+      }
+      previous_azimuth = azimuth[0];
+      if (n < 11) {
+        parseAzimuth(payload + 100, azimuth[2]);
+        azimuth[1] = interpolateAzimuth(azimuth[0], azimuth[2]);
+        average_azimuth_difference += azimuth[1] - azimuth[0];
+      }
+      else {
+        azimuth[1] = azimuth[0] + average_azimuth_difference / 11;
+      }
+      payload = payload + 2; // AZIMUTH
+
+      for (int k = 0; k < 2; k++) {
+        for (int i = 0; i < 16; i++) {
+          parseDataBlock(payload, distance, r);
+          payload = payload + 3; // DATABLOCK
+
+          if (distance > 0) {
+            TData tdata;
+            tdata.intensity = r;
+            tdata.azimuth = azimuth[k] * 0.01f;
+            tdata.distance = distance * 0.01f;
+            data.push_back(tdata);
+
+            r = r * 2;
+            p.r = r > 255 ? r - 256 : 0;
+            p.g = r > 255 ? 255 - (r - 256) : r;
+            p.b = r > 255 ? 0 : 255 - r;
+
+            p.x = distance / 1000.0f * cosf(laser_ids[i] * M_PI / 180.0f) * sinf(azimuth[k] / 100.0f * M_PI / 180.0f);
+            p.y = distance / 1000.0f * cosf(laser_ids[i] * M_PI / 180.0f) * cosf(azimuth[k] / 100.0f * M_PI / 180.0f);
+            p.z = distance / 1000.0f * sinf(laser_ids[i] * M_PI / 180.0f);
+
+            cloud.push_back(p);
+          }
+        }
+      }
+    }
+  }
+
+  return !first;
+}
+
+bool VelodyneStreamer::previousFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
+  cloud.clear();
+  data.clear();
+
+  Packet packet;
+  pcl::PointXYZRGBNormal p;
+
+  bool first = true;
+  float previous_azimuth = -1.0f;
+
+  _reader.setCurrentIndex(_frame_pointers[--_current_frame_idx]);
+
   while (_reader.nextPacket(packet)) {
     if (packet.header().incl_len < 1248) continue;
 
@@ -1012,6 +1119,7 @@ bool VelodyneStreamer::nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZI>& cloud) 
 
     return !first;
 }
+
 bool VelodyneStreamer::nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud) {
     cloud.clear();
 
@@ -1078,6 +1186,7 @@ bool VelodyneStreamer::nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZRGBNormal>&
 
     return !first;
 }
+
 bool VelodyneStreamer::nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
   cloud.clear();
 
@@ -1260,7 +1369,6 @@ bool VelodyneStreamer::nextFrameHDL32(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
     return !first;
 }
 
-
 bool VelodyneStreamer::nextFrameHDL32(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
     cloud.clear();
         data.clear();
@@ -1326,7 +1434,6 @@ bool VelodyneStreamer::nextFrameHDL32(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
 
     return !first;
 }
-
 
 bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZI>& cloud) {
     cloud.clear();
@@ -1425,6 +1532,7 @@ bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZI>& cloud) {
 
     return !first;
 }
+
 bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud) {
     cloud.clear();
 
@@ -1516,6 +1624,7 @@ bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
 
     return !first;
 }
+
 bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
   cloud.clear();
   data.clear();
@@ -1525,6 +1634,10 @@ bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
 
   bool first = true;
   float previous_azimuth = -1.0f;
+
+  _frame_pointers.push_back(_reader.currentIndex());
+  _current_frame_idx++;
+
   while (_reader.nextPacket(packet)) {
     if (packet.header().incl_len < 1248) continue;
     const unsigned char *payload = packet.data().payload();
@@ -1618,6 +1731,110 @@ bool VelodyneStreamer::nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& c
   return !first;
 }
 
+bool VelodyneStreamer::previousFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data) {
+  cloud.clear();
+  data.clear();
+
+  Packet packet;
+  pcl::PointXYZRGBNormal p;
+
+  bool first = true;
+  float previous_azimuth = -1.0f;
+
+  _reader.setCurrentIndex(_frame_pointers[--_current_frame_idx]);
+
+  while (_reader.nextPacket(packet)) {
+    if (packet.header().incl_len < 1248) continue;
+    const unsigned char *payload = packet.data().payload();
+
+    int azimuth;
+    int distance = 0.0f;
+
+    int r;
+    bool upper;
+
+    for (int n = 0; n < 12; n++) {
+      upper = ((int)(payload[1] << 8) + (int)payload[0]) == 0xEEFF;
+      payload = payload + 2; // UPPER-LOWER LASER BLOCK
+
+      parseAzimuth(payload, azimuth);
+      if (first) {
+        previous_azimuth = azimuth;
+        first = false;
+      }
+      else {
+        if (azimuth < previous_azimuth) {
+          return true;
+        }
+      }
+      payload = payload + 2; // AZIMUTH
+
+      for (int i = 0; i < 32; i++) {
+        parseDataBlock(payload, distance, r);
+        payload = payload + 3; // DATABLOCK
+
+        if (distance > 0) {
+
+          distance = 0.1 * distance + arr[i + !upper * 32][DISTCORRECTION];
+
+          float cosVertAngle = cosf(arr[i + !upper * 32][VERTCORRECTION] * M_PI / 180.0f);
+          float sinVertAngle = sinf(arr[i + !upper * 32][VERTCORRECTION] * M_PI / 180.0f);
+
+          float RotCorrection = arr[i + !upper * 32][ROTCORRECTION] * M_PI / 180.0f;
+
+          float horizontalangle = azimuth / 100.0f * M_PI / 180.0f;
+          float sinRotAngle = sinf(horizontalangle - RotCorrection);
+          float cosRotAngle = cosf(horizontalangle - RotCorrection);
+
+          float hOffsetCorr = arr[i + !upper * 32][HORIZOFFSETCORRECTION];
+          float vOffsetCorr = arr[i + !upper * 32][VERTOFFSETCORRECTION];
+
+          float xyDistance = distance * cosVertAngle - vOffsetCorr * sinVertAngle;
+
+          p.x = (xyDistance * sinRotAngle - hOffsetCorr * cosRotAngle) / 100;
+          p.y = (xyDistance * cosRotAngle + hOffsetCorr * sinRotAngle) / 100;
+          p.z = (distance * sinVertAngle + vOffsetCorr * cosVertAngle) / 100;
+
+          if (r != 0) {
+            int minIntensity = 0;
+            int maxIntensity = 0;
+            float intensityScale = 0;
+            minIntensity = arr[i + !upper * 32][MININTENSITY];
+            maxIntensity = arr[i + !upper * 32][MAXINTENSITY];
+            intensityScale = (maxIntensity - minIntensity);
+            distance *= 20000;
+            float focaloffset = 256 * (1 - arr[i + !upper * 32][FOCALDISTANCE] / 13100)*(1 - arr[i + !upper * 32][FOCALDISTANCE] / 13100);
+            float focalslope = arr[i + !upper * 32][FOCALSLOPE];
+
+            float intensityVal1 = r + focalslope*(abs(focaloffset - 256 * (1 - distance / 65535)*(1 - distance / 65535)));
+            if (intensityVal1 < minIntensity) intensityVal1 = minIntensity;
+            if (intensityVal1 > maxIntensity) intensityVal1 = maxIntensity;
+            float intensityColor = (intensityVal1 - minIntensity) / intensityScale;
+
+            r = intensityColor;
+          }
+
+          TData tdata;
+          tdata.intensity = r;
+          tdata.azimuth = azimuth * 0.01f;
+          tdata.distance = distance * 0.01f;
+          data.push_back(tdata);
+
+          r = r * 2;
+          p.r = r > 255 ? r - 256 : 0;
+          p.g = r > 255 ? 255 - (r - 256) : r;
+          p.b = r > 255 ? 0 : 255 - r;
+
+          cloud.push_back(p);
+        }
+        else {
+        }
+      }
+    }
+  }
+
+  return !first;
+}
 
 bool VelodyneStreamer::nextFrameParallel(VCloud& cloud) {
   return true;
@@ -1733,7 +1950,6 @@ bool VelodyneStreamer::nextFrameInOrder(std::vector<std::vector<VPoint>>& pointl
 
   return !first;
 }
-
 
 bool VelodyneStreamer::nextFrameInOrder64(std::vector<std::vector<VPoint>>& pointlist) {
   pointlist.clear();
@@ -1853,4 +2069,8 @@ bool VelodyneStreamer::nextFrameInOrder64(std::vector<std::vector<VPoint>>& poin
   }
 
   return !first;
+}
+
+void VelodyneStreamer::restart() {
+    _reader.reset();
 }

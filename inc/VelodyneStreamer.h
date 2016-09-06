@@ -27,6 +27,7 @@ private:
 
 	bool nextFrameVLP16(VCloud& cloud);
 	bool previousFrameVLP16(VCloud& cloud);
+
 	bool nextFrameVLP16DD(VCloud& cloud);
 	bool nextFrameHDL32(VCloud& cloud);
 	bool nextFrameHDL64(VCloud& cloud);
@@ -34,6 +35,7 @@ private:
 	bool nextFrameVLP16(pcl::PointCloud<pcl::PointXYZI>& cloud);
 	bool nextFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud);
   bool nextFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data);
+	bool previousFrameVLP16(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data);
 
 	bool nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZI>& cloud);
 	bool nextFrameVLP16DD(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud);
@@ -46,6 +48,7 @@ private:
 	bool nextFrameHDL64(pcl::PointCloud<pcl::PointXYZI>& cloud);
 	bool nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud);
   bool nextFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data);
+	bool previousFrameHDL64(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data);
 
 	std::vector<int> _frame_pointers;
 	int _current_frame_idx;
@@ -60,12 +63,16 @@ public:
 
 	void close();
 	bool open(std::string pcap);
+	void restart();
 
 	bool nextFrame(VCloud& cloud);
 	bool previousFrame(VCloud& cloud);
+
 	bool nextFrame(pcl::PointCloud<pcl::PointXYZI>& cloud);
 	bool nextFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud);
   bool nextFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data);
+	bool previousFrame(pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud, std::vector<TData>& data);
+	
 	bool nextFrameParallel(VCloud& cloud);
 
   bool nextFrameInOrder(std::vector<std::vector<VPoint>>& pointlist);
